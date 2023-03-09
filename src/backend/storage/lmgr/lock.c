@@ -224,12 +224,15 @@ static bool IsPageLockHeld PG_USED_FOR_ASSERTS_ONLY = false;
  * self-conflicting, it can't use the fast-path mechanism; but it also does
  * not conflict with any of the locks that do, so we can ignore it completely.
  */
+// fastpath只有对关系上的锁
+// 弱锁（<shareUpdateExclusiveLOck）
 #define EligibleForRelationFastPath(locktag, mode) \
 	((locktag)->locktag_lockmethodid == DEFAULT_LOCKMETHOD && \
 	(locktag)->locktag_type == LOCKTAG_RELATION && \
 	(locktag)->locktag_field1 == MyDatabaseId && \
 	MyDatabaseId != InvalidOid && \
 	(mode) < ShareUpdateExclusiveLock)
+// 强锁 （>shareUpdateExclusiveLock)
 #define ConflictsWithRelationFastPath(locktag, mode) \
 	((locktag)->locktag_lockmethodid == DEFAULT_LOCKMETHOD && \
 	(locktag)->locktag_type == LOCKTAG_RELATION && \
@@ -456,6 +459,8 @@ InitLocks(void)
 		ShmemInitStruct("Fast Path Strong Relation Lock Data",
 						sizeof(FastPathStrongRelationLockData), &found);
 	if (!found)
+        // 如果没有找到，说明之前没有创建过，这次是第一次创建
+        // 初始化FastPathStrong上的自旋锁，为之后加自旋锁作准备
 		SpinLockInit(&FastPathStrongRelationLocks->mutex);
 
 	/*
@@ -778,9 +783,9 @@ LockAcquireExtended(const LOCKTAG *locktag,
 	LOCKMETHODID lockmethodid = locktag->locktag_lockmethodid;
 	LockMethod	lockMethodTable;
 	LOCALLOCKTAG localtag;
-	LOCALLOCK  *locallock;
-	LOCK	   *lock;
-	PROCLOCK   *proclock;
+	LOCALLOCK  *locallock; //本地锁表
+	LOCK	   *lock;// 主锁表
+	PROCLOCK   *proclock;//进城锁表
 	bool		found;
 	ResourceOwner owner;
 	uint32		hashcode;
@@ -794,6 +799,7 @@ LockAcquireExtended(const LOCKTAG *locktag,
 	if (lockmode <= 0 || lockmode > lockMethodTable->numLockModes)
 		elog(ERROR, "unrecognized lock mode: %d", lockmode);
 
+    // 判断是否为恢复模式，恢复模式不能获取RowExclusiveLock以上的锁
 	if (RecoveryInProgress() && !InRecovery &&
 		(locktag->locktag_type == LOCKTAG_OBJECT ||
 		 locktag->locktag_type == LOCKTAG_RELATION) &&
@@ -820,6 +826,7 @@ LockAcquireExtended(const LOCKTAG *locktag,
 	/*
 	 * Find or create a LOCALLOCK entry for this lock and lockmode
 	 */
+//    本地锁表为LockMethodLocalHash，从其中找到对应locktag+logmode状态的对应锁
 	MemSet(&localtag, 0, sizeof(localtag)); /* must clear padding */
 	localtag.lock = *locktag;
 	localtag.mode = lockmode;
@@ -833,6 +840,8 @@ LockAcquireExtended(const LOCKTAG *locktag,
 	 */
 	if (!found)
 	{
+        // 如果没有在本地锁表中找到对应的锁，说明对于此对象当前还没有加锁，
+        // 初始化锁表 为后面加锁作准备
 		locallock->lock = NULL;
 		locallock->proclock = NULL;
 		locallock->hashcode = LockTagHashCode(&(localtag.lock));
@@ -849,6 +858,8 @@ LockAcquireExtended(const LOCKTAG *locktag,
 	else
 	{
 		/* Make sure there will be room to remember the lock */
+        // 如果当前锁表中已经有锁了，需要判断是否还有位置可以放这个锁
+        // 如果超出范围，提高maxLockOwners的上限并调整lockOwners数组的大小
 		if (locallock->numLockOwners >= locallock->maxLockOwners)
 		{
 			int			newsize = locallock->maxLockOwners * 2;
@@ -907,8 +918,8 @@ LockAcquireExtended(const LOCKTAG *locktag,
 	 */
 	if (lockmode >= AccessExclusiveLock &&
 		locktag->locktag_type == LOCKTAG_RELATION &&
-		!RecoveryInProgress() &&
-		XLogStandbyInfoActive())
+		!RecoveryInProgress() && //确认当前没有进行恢复
+		XLogStandbyInfoActive()) //确认当前XLog正在被记录
 	{
 		LogAccessExclusiveLockPrepare();
 		log_lock = true;
@@ -924,6 +935,7 @@ LockAcquireExtended(const LOCKTAG *locktag,
 	 * lock type on a relation we have already locked using the fast-path, but
 	 * for now we don't worry about that case either.
 	 */
+    // 获取弱锁
 	if (EligibleForRelationFastPath(locktag, lockmode) &&
 		FastPathLocalUseCount < FP_LOCK_SLOTS_PER_BACKEND)
 	{
@@ -936,12 +948,17 @@ LockAcquireExtended(const LOCKTAG *locktag,
 		 * FastPathStrongRelationLocks->counts becomes visible after we test
 		 * it has yet to begin to transfer fast-path locks.
 		 */
+        // 这里为加弱锁过程加了一个轻量级锁，用于保证对表上加弱锁不会并发加强锁
 		LWLockAcquire(&MyProc->fpInfoLock, LW_EXCLUSIVE);
+        // 判断是否已经有此表的强锁，
+        // 如果已经有了，则无需获取弱锁
+        // 如果还没有，直接通过fastpath获取弱锁
 		if (FastPathStrongRelationLocks->count[fasthashcode] != 0)
 			acquired = false;
 		else
 			acquired = FastPathGrantRelationLock(locktag->locktag_field2,
 												 lockmode);
+        // 释放用于加弱锁的轻量级锁
 		LWLockRelease(&MyProc->fpInfoLock);
 		if (acquired)
 		{
@@ -966,8 +983,9 @@ LockAcquireExtended(const LOCKTAG *locktag,
 	if (ConflictsWithRelationFastPath(locktag, lockmode))
 	{
 		uint32		fasthashcode = FastPathStrongLockHashPartition(hashcode);
-
+        // 加强锁step1：执行强锁获取函数
 		BeginStrongLockAcquire(locallock, fasthashcode);
+        // 加强锁step2：调用FastPathTransferRelationLocks把弱锁转移到主锁表中
 		if (!FastPathTransferRelationLocks(lockMethodTable, locktag,
 										   hashcode))
 		{
@@ -1177,7 +1195,7 @@ SetupLockInTable(LockMethod lockMethodTable, PGPROC *proc,
 	bool		found;
 
 	/*
-	 * Find or create a lock with this tag.
+	 * Find or create a lock with this tag
 	 */
 	lock = (LOCK *) hash_search_with_hash_value(LockMethodLockHash,
 												(const void *) locktag,
@@ -1226,9 +1244,12 @@ SetupLockInTable(LockMethod lockMethodTable, PGPROC *proc,
 														proclock_hashcode,
 														HASH_ENTER_NULL,
 														&found);
+    // 这里的hash_search找到的结果 proclock感觉像是有没有这个指针，found是有没有为这个位置分配空间
 	if (!proclock)
 	{
 		/* Oops, not enough shmem for the proclock */
+        // 这里需要清除掉之前lock的空间，因为proclock没有找到，说明没有空间
+        // 必须让两者对齐
 		if (lock->nRequested == 0)
 		{
 			/*
@@ -1281,7 +1302,7 @@ SetupLockInTable(LockMethod lockMethodTable, PGPROC *proc,
 		Assert((proclock->holdMask & ~lock->grantMask) == 0);
 
 #ifdef CHECK_DEADLOCK_RISK
-
+// 一些死锁检测
 		/*
 		 * Issue warning if we already hold a lower-level lock on this object
 		 * and do not hold a lock of the requested level or higher. This
@@ -1303,6 +1324,7 @@ SetupLockInTable(LockMethod lockMethodTable, PGPROC *proc,
 			{
 				if (proclock->holdMask & LOCKBIT_ON(i))
 				{
+                    // 如果持锁等级大于请求等级，不会有死锁的情况
 					if (i >= (int) lockmode)
 						break;	/* safe: we have a lock >= req level */
 					elog(LOG, "deadlock risk: raising lock level"
@@ -1731,7 +1753,7 @@ BeginStrongLockAcquire(LOCALLOCK *locallock, uint32 fasthashcode)
 	 * XXX: It might be worth considering using an atomic fetch-and-add
 	 * instruction here, on architectures where that is supported.
 	 */
-
+    // 获取自旋锁保证 获取强锁时安全
 	SpinLockAcquire(&FastPathStrongRelationLocks->mutex);
 	FastPathStrongRelationLocks->count[fasthashcode]++;
 	locallock->holdsStrongLockCount = true;
@@ -2651,6 +2673,7 @@ LockReassignOwner(LOCALLOCK *locallock, ResourceOwner parent)
  * FastPathGrantRelationLock
  *		Grant lock using per-backend fast-path array, if there is space.
  */
+// 在fastpath记录中加入新的锁信息
 static bool
 FastPathGrantRelationLock(Oid relid, LOCKMODE lockmode)
 {
@@ -2658,19 +2681,26 @@ FastPathGrantRelationLock(Oid relid, LOCKMODE lockmode)
 	uint32		unused_slot = FP_LOCK_SLOTS_PER_BACKEND;
 
 	/* Scan for existing entry for this relid, remembering empty slot. */
+    // 检查当时是否已经对此表加弱锁，
+    // 如果已经存在弱锁，即在MyProc的fpRelId中有此表的一项，
 	for (f = 0; f < FP_LOCK_SLOTS_PER_BACKEND; f++)
 	{
+        // 找到当前fpRelId中为空的位置
 		if (FAST_PATH_GET_BITS(MyProc, f) == 0)
 			unused_slot = f;
+        // fpRelId记录MyProc所持有的弱锁个数
 		else if (MyProc->fpRelId[f] == relid)
 		{
+            // Assert 如果假设成立，程序正常运行；如果不成立，报错或者终止程序
 			Assert(!FAST_PATH_CHECK_LOCKMODE(MyProc, f, lockmode));
+            // 这里直接设定不会把级别更高的锁给错误地覆盖吗？
 			FAST_PATH_SET_LOCKMODE(MyProc, f, lockmode);
 			return true;
 		}
 	}
 
 	/* If no existing entry, use any empty slot. */
+    // 如果没有对这个表加弱锁，在还有空位的情况下，则增加新条目
 	if (unused_slot < FP_LOCK_SLOTS_PER_BACKEND)
 	{
 		MyProc->fpRelId[unused_slot] = relid;
@@ -2754,6 +2784,7 @@ FastPathTransferRelationLocks(LockMethod lockMethodTable, const LOCKTAG *locktag
 		 * fencing operation since the other backend set proc->databaseId.  So
 		 * for now, we test it after acquiring the LWLock just to be safe.
 		 */
+        // 如果不是这个gb中的锁，直接跳过
 		if (proc->databaseId != locktag->locktag_field1)
 		{
 			LWLockRelease(&proc->fpInfoLock);
@@ -2778,6 +2809,7 @@ FastPathTransferRelationLocks(LockMethod lockMethodTable, const LOCKTAG *locktag
 
 				if (!FAST_PATH_CHECK_LOCKMODE(proc, f, lockmode))
 					continue;
+                // 在主锁表和进程锁表中找到对应的锁
 				proclock = SetupLockInTable(lockMethodTable, proc, locktag,
 											hashcode, lockmode);
 				if (!proclock)

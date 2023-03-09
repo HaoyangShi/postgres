@@ -962,7 +962,11 @@ hash_search(HTAB *hashp,
 									   action,
 									   foundPtr);
 }
-
+// 调试看一下返回的lock和参数foundPtr都是什么意思
+// 感觉是这个的返回值为对应锁表的指针，
+// 如果之前没有对应的锁表，则*foundPtr为false，并且创建新的锁表返回
+// 如果共享内存中已经有了对应的锁表，则*foundPtr为true，并返回对应锁表的指针
+// 如果返回值为空，则说明之前没有对应的锁表，并且现在共享内存中也没没有足够的位置可以新建锁表
 void *
 hash_search_with_hash_value(HTAB *hashp,
 							const void *keyPtr,
@@ -1041,7 +1045,7 @@ hash_search_with_hash_value(HTAB *hashp,
 #endif
 	}
 
-	if (foundPtr)
+	if (foundPtr) // 一定可以走进循环，因为foundPtr是指针，只要指针不为空，布尔值就是被判定为真
 		*foundPtr = (bool) (currBucket != NULL);
 
 	/*

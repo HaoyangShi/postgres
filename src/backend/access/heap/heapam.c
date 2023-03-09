@@ -4294,6 +4294,7 @@ heap_lock_tuple(Relation relation, HeapTuple tuple,
 	tuple->t_tableOid = RelationGetRelid(relation);
 
 l3:
+    // 判断元组是否可以更新
 	result = HeapTupleSatisfiesUpdate(tuple, cid, *buffer);
 
 	if (result == TM_Invisible)
@@ -4307,9 +4308,9 @@ l3:
 		result = TM_Invisible;
 		goto out_locked;
 	}
-	else if (result == TM_BeingModified ||
-			 result == TM_Updated ||
-			 result == TM_Deleted)
+	else if (result == TM_BeingModified || //这个tuple正在被本事务修改
+			 result == TM_Updated || // 次tuple被已经提交的事务修改
+			 result == TM_Deleted) // 此tuple被已经提交的事务删除
 	{
 		TransactionId xwait;
 		uint16		infomask;

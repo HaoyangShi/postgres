@@ -24,7 +24,8 @@
  */
 typedef int LOCKMASK;
 typedef int LOCKMODE;
-
+// postgresql docs：不同的锁模式的名称反映了每种锁定模式的典型用法，
+// 但是不同锁模式之间唯一的真正区别是与其冲突的锁模式集
 /*
  * These are the valid values of type LOCKMODE for all the standard lock
  * methods (both DEFAULT and USER).

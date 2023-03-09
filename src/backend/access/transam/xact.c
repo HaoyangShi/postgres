@@ -2228,7 +2228,7 @@ CommitTransaction(void)
 	 * Mark serializable transaction as complete for predicate locking
 	 * purposes.  This should be done as late as we can put it and still allow
 	 * errors to be raised for failure patterns found at commit.  This is not
-	 * appropriate in a parallel worker however, because we aren't committing
+	 * appropriate in a parallel worker however, because we aren't :committing
 	 * the leader's transaction and its serializable state will live on.
 	 */
 	if (!is_parallel_worker)

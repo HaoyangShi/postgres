@@ -281,6 +281,8 @@ struct PGPROC
 									 * group member */
 
 	/* Lock manager data, recording fast-path locks taken by this backend. */
+    // fpLockBits 保存当前弱锁情况的位图
+    // 每3个位组成一个槽（因为一共三种弱锁），每个槽与fpRelId一一对应
 	LWLock		fpInfoLock;		/* protects per-backend fast-path state */
 	uint64		fpLockBits;		/* lock modes held for each fast-path slot */
 	Oid			fpRelId[FP_LOCK_SLOTS_PER_BACKEND]; /* slots for rel oids */
