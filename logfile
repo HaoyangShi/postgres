@@ -1,0 +1,60 @@
+2023-03-07 15:38:48.315 CST [59450] LOG:  starting PostgreSQL 15.2 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 11.2.1 20220127 (Red Hat 11.2.1-9), 64-bit
+2023-03-07 15:38:48.315 CST [59450] LOG:  listening on IPv6 address "::1", port 5433
+2023-03-07 15:38:48.315 CST [59450] LOG:  listening on IPv4 address "127.0.0.1", port 5433
+2023-03-07 15:38:48.316 CST [59450] LOG:  listening on Unix socket "/tmp/.s.PGSQL.5433"
+2023-03-07 15:38:48.319 CST [59453] LOG:  database system was shut down at 2023-03-07 10:16:09 CST
+2023-03-07 15:38:48.321 CST [59450] LOG:  database system is ready to accept connections
+2023-03-07 15:40:50.289 CST [59864] FATAL:  lock file "postmaster.pid" already exists
+2023-03-07 15:40:50.289 CST [59864] HINT:  Is another postmaster (PID 59450) running in data directory "/home/shihaoyang/pg_data"?
+2023-03-07 15:43:48.419 CST [59451] LOG:  checkpoint starting: time
+2023-03-07 15:43:52.831 CST [59451] LOG:  checkpoint complete: wrote 47 buffers (0.3%); 0 WAL file(s) added, 0 removed, 0 recycled; write=4.411 s, sync=0.001 s, total=4.412 s; sync files=11, longest=0.001 s, average=0.001 s; distance=272 kB, estimate=272 kB
+2023-03-07 15:47:49.606 CST [60968] ERROR:  unrecognized configuration parameter "tables"
+2023-03-07 15:47:49.606 CST [60968] STATEMENT:  show tables;
+2023-03-07 15:57:24.343 CST [61604] ERROR:  syntax error at or near "create" at character 59
+2023-03-07 15:57:24.343 CST [61604] STATEMENT:  select tablename from pg_tables where schemaname='public'
+	create table t(id int,name char);
+2023-03-07 15:58:49.047 CST [59451] LOG:  checkpoint starting: time
+2023-03-07 15:58:51.354 CST [59451] LOG:  checkpoint complete: wrote 24 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=2.306 s, sync=0.001 s, total=2.307 s; sync files=20, longest=0.001 s, average=0.001 s; distance=88 kB, estimate=254 kB
+2023-03-07 16:10:49.587 CST [59455] WARNING:  autovacuum worker took too long to start; canceled
+2023-03-07 16:11:49.617 CST [59455] WARNING:  autovacuum worker took too long to start; canceled
+2023-03-07 16:12:01.075 CST [65102] LOG:  could not send data to client: 断开的管道
+2023-03-07 16:12:01.076 CST [65102] FATAL:  connection to client lost
+2023-03-07 16:18:49.467 CST [59451] LOG:  checkpoint starting: time
+2023-03-07 16:18:49.569 CST [59451] LOG:  checkpoint complete: wrote 2 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.101 s, sync=0.001 s, total=0.102 s; sync files=2, longest=0.001 s, average=0.001 s; distance=0 kB, estimate=228 kB
+2023-03-08 14:43:24.058 CST [59455] WARNING:  autovacuum worker took too long to start; canceled
+2023-03-10 14:48:44.325 CST [42752] LOG:  starting PostgreSQL 15.2 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 11.2.1 20220127 (Red Hat 11.2.1-9), 64-bit
+2023-03-10 14:48:44.326 CST [42752] LOG:  listening on IPv6 address "::1", port 5433
+2023-03-10 14:48:44.326 CST [42752] LOG:  listening on IPv4 address "127.0.0.1", port 5433
+2023-03-10 14:48:44.326 CST [42752] LOG:  listening on Unix socket "/tmp/.s.PGSQL.5433"
+2023-03-10 14:48:44.330 CST [42755] LOG:  database system was shut down at 2023-03-10 14:48:38 CST
+2023-03-10 14:48:44.331 CST [42752] LOG:  database system is ready to accept connections
+2023-03-10 14:49:40.313 CST [42776] ERROR:  syntax error at or near "'
+	;
+	'" at character 24
+2023-03-10 14:49:40.313 CST [42776] STATEMENT:  select pg_backend_pid()'
+	;
+	'
+	;
+2023-03-10 14:53:44.430 CST [42753] LOG:  checkpoint starting: time
+2023-03-10 14:53:44.432 CST [42753] LOG:  checkpoint complete: wrote 3 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.001 s, sync=0.001 s, total=0.002 s; sync files=2, longest=0.001 s, average=0.001 s; distance=0 kB, estimate=0 kB
+2023-03-10 14:58:44.483 CST [42753] LOG:  checkpoint starting: time
+2023-03-10 14:58:44.584 CST [42753] LOG:  checkpoint complete: wrote 2 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.101 s, sync=0.001 s, total=0.102 s; sync files=2, longest=0.001 s, average=0.001 s; distance=0 kB, estimate=0 kB
+2023-03-10 15:03:44.685 CST [42753] LOG:  checkpoint starting: time
+2023-03-10 15:03:44.786 CST [42753] LOG:  checkpoint complete: wrote 2 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.101 s, sync=0.001 s, total=0.102 s; sync files=2, longest=0.001 s, average=0.001 s; distance=0 kB, estimate=0 kB
+2023-03-10 15:18:45.088 CST [42753] LOG:  checkpoint starting: time
+2023-03-10 15:18:45.189 CST [42753] LOG:  checkpoint complete: wrote 2 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.101 s, sync=0.001 s, total=0.102 s; sync files=2, longest=0.001 s, average=0.001 s; distance=0 kB, estimate=0 kB
+2023-03-10 15:21:10.898 CST [42752] LOG:  server process (PID 42776) was terminated by signal 4: 非法指令
+2023-03-10 15:21:10.898 CST [42752] DETAIL:  Failed process was running: update t set name='f' where id=1;
+2023-03-10 15:21:10.898 CST [42752] LOG:  terminating any other active server processes
+2023-03-10 15:21:10.899 CST [50077] FATAL:  the database system is in recovery mode
+2023-03-10 15:21:10.899 CST [42752] LOG:  all server processes terminated; reinitializing
+2023-03-10 15:21:10.910 CST [50078] LOG:  database system was interrupted; last known up at 2023-03-10 15:18:45 CST
+2023-03-10 15:21:10.921 CST [50078] LOG:  database system was not properly shut down; automatic recovery in progress
+2023-03-10 15:21:10.923 CST [50078] LOG:  redo starts at 0/1545558
+2023-03-10 15:21:10.923 CST [50078] LOG:  invalid record length at 0/1545640: wanted 24, got 0
+2023-03-10 15:21:10.923 CST [50078] LOG:  redo done at 0/1545608 system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
+2023-03-10 15:21:10.927 CST [50079] LOG:  checkpoint starting: end-of-recovery immediate wait
+2023-03-10 15:21:10.928 CST [50079] LOG:  checkpoint complete: wrote 3 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.001 s, sync=0.001 s, total=0.002 s; sync files=2, longest=0.001 s, average=0.001 s; distance=0 kB, estimate=0 kB
+2023-03-10 15:21:10.929 CST [42752] LOG:  database system is ready to accept connections
+2023-03-10 15:51:11.373 CST [50079] LOG:  checkpoint starting: time
+2023-03-10 15:51:11.474 CST [50079] LOG:  checkpoint complete: wrote 2 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.101 s, sync=0.001 s, total=0.102 s; sync files=2, longest=0.001 s, average=0.001 s; distance=0 kB, estimate=0 kB

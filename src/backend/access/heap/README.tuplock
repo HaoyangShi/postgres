@@ -59,9 +59,16 @@ prevents tuple removal and modifications of key fields. This lock level is
 just strong enough to implement RI checks, i.e. it ensures that tuples do not
 go away from under a check, without blocking transactions that want to update
 the tuple without changing its key.
+Update级别可以保护所有更新操作的安全
+
+如果是删除某一tuple或者更改tuple的key必须使用最高级别Update的锁，其他的update操作，
+比如修改某个field的值可以使用NoKeyUpdate。他不会最低级keyshare的读取？
+
+share级别会阻止所有的修改，也就是说与update和NoKeyUpdate都冲突
+
+删除tuple时需要获取update锁，最弱一级的Key share锁和update级别的锁冲突，保证当前tuple不会被删除
 
 The conflict table is:
-
                   UPDATE       NO KEY UPDATE    SHARE        KEY SHARE
 UPDATE           conflict        conflict      conflict      conflict
 NO KEY UPDATE    conflict        conflict      conflict
@@ -125,7 +132,7 @@ The following infomask bits are applicable:
 - HEAP_XMAX_INVALID
   Any tuple with this bit set does not have a valid value stored in XMAX.
 
-- HEAP_XMAX_IS_MULTI
+- HEAP_XMAX_IS_MULTI 
   This bit is set if the tuple's Xmax is a MultiXactId (as opposed to a
   regular TransactionId).
 

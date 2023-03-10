@@ -4283,6 +4283,7 @@ heap_lock_tuple(Relation relation, HeapTuple tuple,
 	if (PageIsAllVisible(BufferGetPage(*buffer)))
 		visibilitymap_pin(relation, block, &vmbuffer);
 
+    // 锁住buffer
 	LockBuffer(*buffer, BUFFER_LOCK_EXCLUSIVE);
 
 	page = BufferGetPage(*buffer);
