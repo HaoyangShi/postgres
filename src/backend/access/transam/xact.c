@@ -1311,10 +1311,12 @@ RecordTransactionCommit(void)
 													 &RelcacheInitFileInval);
 	wrote_xlog = (XactLastRecEnd != 0);
 
+	// step1:提交前内存准备及复制准备工作（？）
 	/*
 	 * If we haven't been assigned an XID yet, we neither can, nor do we want
 	 * to write a COMMIT record.
 	 */
+	// 如果当前事务处于invalid状态，意思是不进行正常的commit流程
 	if (!markXidCommitted)
 	{
 		/*
@@ -1358,6 +1360,8 @@ RecordTransactionCommit(void)
 		if (!wrote_xlog)
 			goto cleanup;
 	}
+	// 如果markXidCommitted=True，说明此事务要被正常提交，
+	// 做好提交的memory准备工作和 复制移交（？）
 	else
 	{
 		bool		replorigin;
@@ -1373,6 +1377,8 @@ RecordTransactionCommit(void)
 		 * Begin commit critical section and insert the commit XLOG record.
 		 */
 		/* Tell bufmgr and smgr to prepare for commit */
+		// BufmgrCommit：做提交的准备工作 Do whatever is needed to prepare for 
+		// commit at the bufmgr and smgr levels
 		BufmgrCommit();
 
 		/*
@@ -1398,6 +1404,9 @@ RecordTransactionCommit(void)
 
 		SetCurrentTransactionStopTimestamp();
 
+		//Log the commit record for a plain or twophase transaction commit.
+		//A 2pc commit will be emitted when twophase_xid is valid, a plain one
+		//otherwise.
 		XactLogCommitRecord(xactStopTimestamp,
 							nchildren, children, nrels, rels,
 							ndroppedstats, droppedstats,
@@ -1429,6 +1438,7 @@ RecordTransactionCommit(void)
 									   replorigin_session_origin);
 	}
 
+	// step2：进行同步或异步提交的XLOG落盘管理
 	/*
 	 * Check if we want to commit asynchronously.  We can allow the XLOG flush
 	 * to happen asynchronously if synchronous_commit=off, or if the current
@@ -1454,6 +1464,7 @@ RecordTransactionCommit(void)
 	 * if all to-be-deleted tables are temporary though, since they are lost
 	 * anyway if we crash.)
 	 */
+	// if 进行同步提交 1 进行日志落盘 2 标记CLOG
 	if ((wrote_xlog && markXidCommitted &&
 		 synchronous_commit > SYNCHRONOUS_COMMIT_OFF) ||
 		forceSyncCommit || nrels > 0)
@@ -1466,6 +1477,7 @@ RecordTransactionCommit(void)
 		if (markXidCommitted)
 			TransactionIdCommitTree(xid, nchildren, children);
 	}
+	// else 进行异步提交
 	else
 	{
 		/*
@@ -1497,12 +1509,13 @@ RecordTransactionCommit(void)
 	if (markXidCommitted)
 	{
 		MyProc->delayChkptFlags &= ~DELAY_CHKPT_START;
-		END_CRIT_SECTION();
+		END_CRIT_SECTION();  //begin_crit_section在step1 markXidCommitted==true部分调用
 	}
 
 	/* Compute latestXid while we have the child XIDs handy */
 	latestXid = TransactionIdLatest(xid, nchildren, children);
 
+	// step3: 等待同步复制结果
 	/*
 	 * Wait for synchronous replication, if required. Similar to the decision
 	 * above about using committing asynchronously we only want to wait if
@@ -2173,7 +2186,7 @@ CommitTransaction(void)
 		 * Fire all currently pending deferred triggers.
 		 */
 		AfterTriggerFireDeferred();
-
+  
 		/*
 		 * Close open portals (converting holdable ones into static portals).
 		 * If there weren't any, we are done ... otherwise loop back to check

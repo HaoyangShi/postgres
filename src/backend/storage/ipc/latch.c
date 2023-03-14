@@ -490,6 +490,8 @@ WaitLatch(Latch *latch, int wakeEvents, long timeout,
 	 */
 	if (!(wakeEvents & WL_LATCH_SET))
 		latch = NULL;
+	
+	//设置latch用于被walsender发现
 	ModifyWaitEvent(LatchWaitSet, LatchWaitSetLatchPos, WL_LATCH_SET, latch);
 	LatchWaitSet->exit_on_postmaster_death =
 		((wakeEvents & WL_EXIT_ON_PM_DEATH) != 0);

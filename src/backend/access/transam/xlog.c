@@ -2505,6 +2505,9 @@ UpdateMinRecoveryPoint(XLogRecPtr lsn, bool force)
  * NOTE: this differs from XLogWrite mainly in that the WALWriteLock is not
  * already held, and we try to avoid acquiring it if possible.
  */
+// 将Xlog落盘，
+// 并且在过程中检查是否有其他进程同时在进行落盘，不会使得两者进行重复的写入
+// 最后在落盘结束后 唤醒WALSender
 void
 XLogFlush(XLogRecPtr record)
 {

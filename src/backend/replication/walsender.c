@@ -1908,7 +1908,7 @@ ProcessRepliesIfAny(void)
 	/*
 	 * If we already received a CopyDone from the frontend, any subsequent
 	 * message is the beginning of a new command, and should be processed in
-	 * the main processing loop.
+	 * the main processing loop.1
 	 */
 	while (!streamingDoneReceiving)
 	{
@@ -2481,6 +2481,7 @@ WalSndLoop(WalSndSendDataCallback send_data)
 		}
 
 		/* Check for input from the client */
+		// 如果有任何消息 表示WalSender应该发送消息，那么WalSender都会对此回应
 		ProcessRepliesIfAny();
 
 		/*
@@ -2488,6 +2489,20 @@ WalSndLoop(WalSndSendDataCallback send_data)
 		 * ourselves, and the output buffer is empty, it's time to exit
 		 * streaming.
 		 */
+		// 结束大循环的条件：结束所有的发送和接受消息，并且pq_is_send_pending为false
+		// 但我认为关键条件 结束所有发送消息
+		// pq_is_send_pending 为 PQCommMethod 记录的布尔值，
+		// 用于表示是否还有backend继续添加的buffer
+		// PQCommMethod 为frontend和backend进行通讯的管理函数 
+		// PQComm：Communication functions between the Frontend and the Backend
+		// 这三个全局变量
+		// 1 streamingDoneSending在都是在回调函数send_data和ProcessRepliesIfAny中修改，
+		// 回调函数在WalSndloop的参数中确定
+		// pg中两个回调函数，用于物理复制的XlogSendPhysical和逻辑复制的XLogSendLogical
+		// exec_replication_command@walsender.c 
+		//      -> startReplication@walsender.c ->WalSndloop(XLogSendPhysical)
+		//      -> startLogicalReplication@walsender.c ->WalSndloop(XLogSendLogical)
+		// 2 streamingDoneReceiving和pq_is_send_pending都是在ProcessRepliesIfAny
 		if (streamingDoneReceiving && streamingDoneSending &&
 			!pq_is_send_pending())
 			break;
@@ -2498,6 +2513,13 @@ WalSndLoop(WalSndSendDataCallback send_data)
 		 * again until we've flushed it ... but we'd better assume we are not
 		 * caught up.
 		 */
+		// WalSndCaughtup标记是否还有未发送的日志，表示是否还需要继续等待
+		// 如果当前还有未发送的日志，就直接发送
+		// 如果没有，即所有日志已经发送完成，则继续等待，见2555行
+		// 为什么这里都还是要用pq_is_send_pending来判断当前是否还有未发送的日志，
+		// 而不直接判断WalSndcaughtUp呢？
+		// 可能在实现的时候并没有全部更新WalSndCaughtUp变量吧，导致其可能存在一定时差
+		// pq_is_send_pending为false，表示不会再有backend的新buffer需要发送
 		if (!pq_is_send_pending())
 			send_data();
 		else
@@ -2571,6 +2593,7 @@ WalSndLoop(WalSndSendDataCallback send_data)
 				wakeEvents |= WL_SOCKET_WRITEABLE;
 
 			/* Sleep until something happens or we time out */
+			// 这里就让WalSender休眠，之后后面有事件将其唤醒
 			WalSndWait(wakeEvents, sleeptime, WAIT_EVENT_WAL_SENDER_MAIN);
 		}
 	}
@@ -2747,6 +2770,7 @@ XLogSendPhysical(void)
 	if (got_STOPPING)
 		WalSndSetState(WALSNDSTATE_STOPPING);
 
+	// streamingDoneSending为true，说明已经完成了所有信息发送，可以直接返回
 	if (streamingDoneSending)
 	{
 		WalSndCaughtUp = true;
@@ -2754,7 +2778,7 @@ XLogSendPhysical(void)
 	}
 
 	/* Figure out how far we can safely send the WAL. */
-	if (sendTimeLineIsHistoric)
+	if (sendTimeLineIsHistoric) 
 	{
 		/*
 		 * Streaming an old timeline that's in this server's history, but is
@@ -2763,7 +2787,7 @@ XLogSendPhysical(void)
 		 */
 		SendRqstPtr = sendTimeLineValidUpto;
 	}
-	else if (am_cascading_walsender)
+	else if (am_cascading_walsender) // 是一个其他副本的级联walsender
 	{
 		TimeLineID	SendRqstTLI;
 
@@ -2837,6 +2861,7 @@ XLogSendPhysical(void)
 		 * primary: if the primary subsequently crashes and restarts, standbys
 		 * must not have applied any WAL that got lost on the primary.
 		 */
+		// 发送的请求必须是已经落盘 经过持久化的位置
 		SendRqstPtr = GetFlushRecPtr(NULL);
 	}
 
