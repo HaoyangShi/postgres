@@ -24,7 +24,6 @@
 #include "storage/lmgr.h"
 #include "storage/smgr.h"
 
-
 /*
  * RelationPutHeapTuple - place tuple at specified page
  *
@@ -32,13 +31,12 @@
  *
  * Note - caller must hold BUFFER_LOCK_EXCLUSIVE on the buffer.
  */
-void
-RelationPutHeapTuple(Relation relation,
-					 Buffer buffer,
-					 HeapTuple tuple,
-					 bool token)
+void RelationPutHeapTuple(Relation relation,
+						  Buffer buffer,
+						  HeapTuple tuple,
+						  bool token)
 {
-	Page		pageHeader;
+	Page pageHeader;
 	OffsetNumber offnum;
 
 	/*
@@ -59,24 +57,27 @@ RelationPutHeapTuple(Relation relation,
 	/* Add the tuple to the page */
 	pageHeader = BufferGetPage(buffer);
 
-	offnum = PageAddItem(pageHeader, (Item) tuple->t_data,
+	/* 将tuple.data写入page，记录line pointer和具体tuple*/
+	offnum = PageAddItem(pageHeader, (Item)tuple->t_data,
 						 tuple->t_len, InvalidOffsetNumber, false, true);
 
 	if (offnum == InvalidOffsetNumber)
 		elog(PANIC, "failed to add tuple to page");
 
 	/* Update tuple->t_self to the actual position where it was stored */
-	ItemPointerSet(&(tuple->t_self), BufferGetBlockNumber(buffer), offnum);
+	/* 在tuple-> t_self 中记录blockNumber，和tuple的line pointer*/
+	(&(tuple->t_self), BufferGetBlockNumber(buffer), offnum);
 
 	/*
 	 * Insert the correct position into CTID of the stored tuple, too (unless
 	 * this is a speculative insertion, in which case the token is held in
 	 * CTID field instead)
 	 */
+	// 将cur_tid 写入实际的当前buffer page的tuple中
 	if (!token)
 	{
-		ItemId		itemId = PageGetItemId(pageHeader, offnum);
-		HeapTupleHeader item = (HeapTupleHeader) PageGetItem(pageHeader, itemId);
+		ItemId itemId = PageGetItemId(pageHeader, offnum);
+		HeapTupleHeader item = (HeapTupleHeader)PageGetItem(pageHeader, itemId);
 
 		item->t_ctid = tuple->t_self;
 	}
@@ -89,7 +90,7 @@ static Buffer
 ReadBufferBI(Relation relation, BlockNumber targetBlock,
 			 ReadBufferMode mode, BulkInsertState bistate)
 {
-	Buffer		buffer;
+	Buffer buffer;
 
 	/* If not bulk-insert, exactly like ReadBuffer */
 	if (!bistate)
@@ -140,8 +141,8 @@ GetVisibilityMapPins(Relation relation, Buffer buffer1, Buffer buffer2,
 					 BlockNumber block1, BlockNumber block2,
 					 Buffer *vmbuffer1, Buffer *vmbuffer2)
 {
-	bool		need_to_pin_buffer1;
-	bool		need_to_pin_buffer2;
+	bool need_to_pin_buffer1;
+	bool need_to_pin_buffer2;
 
 	Assert(BufferIsValid(buffer1));
 	Assert(buffer2 == InvalidBuffer || block1 <= block2);
@@ -149,11 +150,8 @@ GetVisibilityMapPins(Relation relation, Buffer buffer1, Buffer buffer2,
 	while (1)
 	{
 		/* Figure out which pins we need but don't have. */
-		need_to_pin_buffer1 = PageIsAllVisible(BufferGetPage(buffer1))
-			&& !visibilitymap_pin_ok(block1, *vmbuffer1);
-		need_to_pin_buffer2 = buffer2 != InvalidBuffer
-			&& PageIsAllVisible(BufferGetPage(buffer2))
-			&& !visibilitymap_pin_ok(block2, *vmbuffer2);
+		need_to_pin_buffer1 = PageIsAllVisible(BufferGetPage(buffer1)) && !visibilitymap_pin_ok(block1, *vmbuffer1);
+		need_to_pin_buffer2 = buffer2 != InvalidBuffer && PageIsAllVisible(BufferGetPage(buffer2)) && !visibilitymap_pin_ok(block2, *vmbuffer2);
 		if (!need_to_pin_buffer1 && !need_to_pin_buffer2)
 			return;
 
@@ -179,8 +177,7 @@ GetVisibilityMapPins(Relation relation, Buffer buffer1, Buffer buffer2,
 		 * busy pinning the first one.  If it looks like that's a possible
 		 * scenario, we'll need to make a second pass through this loop.
 		 */
-		if (buffer2 == InvalidBuffer || buffer1 == buffer2
-			|| (need_to_pin_buffer1 && need_to_pin_buffer2))
+		if (buffer2 == InvalidBuffer || buffer1 == buffer2 || (need_to_pin_buffer1 && need_to_pin_buffer2))
 			break;
 	}
 }
@@ -195,9 +192,9 @@ static void
 RelationAddExtraBlocks(Relation relation, BulkInsertState bistate)
 {
 	BlockNumber blockNum,
-				firstBlock = InvalidBlockNumber;
-	int			extraBlocks;
-	int			lockWaiters;
+		firstBlock = InvalidBlockNumber;
+	int extraBlocks;
+	int lockWaiters;
 
 	/* Use the length of the lock wait queue to judge how much to extend. */
 	lockWaiters = RelationExtensionLockWaiterCount(relation);
@@ -214,9 +211,9 @@ RelationAddExtraBlocks(Relation relation, BulkInsertState bistate)
 
 	do
 	{
-		Buffer		buffer;
-		Page		page;
-		Size		freespace;
+		Buffer buffer;
+		Page page;
+		Size freespace;
 
 		/*
 		 * Extend by one page.  This should generally match the main-line
@@ -257,8 +254,7 @@ RelationAddExtraBlocks(Relation relation, BulkInsertState bistate)
 		 * backends, and we want that to happen without delay.
 		 */
 		RecordPageWithFreeSpace(relation, blockNum, freespace);
-	}
-	while (--extraBlocks > 0);
+	} while (--extraBlocks > 0);
 
 	/*
 	 * Updating the upper levels of the free space map is too expensive to do
@@ -335,18 +331,18 @@ RelationGetBufferForTuple(Relation relation, Size len,
 						  BulkInsertState bistate,
 						  Buffer *vmbuffer, Buffer *vmbuffer_other)
 {
-	bool		use_fsm = !(options & HEAP_INSERT_SKIP_FSM);
-	Buffer		buffer = InvalidBuffer;
-	Page		page;
-	Size		nearlyEmptyFreeSpace,
-				pageFreeSpace = 0,
-				saveFreeSpace = 0,
-				targetFreeSpace = 0;
+	bool use_fsm = !(options & HEAP_INSERT_SKIP_FSM);
+	Buffer buffer = InvalidBuffer;
+	Page page;
+	Size nearlyEmptyFreeSpace,
+		pageFreeSpace = 0,
+		saveFreeSpace = 0,
+		targetFreeSpace = 0;
 	BlockNumber targetBlock,
-				otherBlock;
-	bool		needLock;
+		otherBlock;
+	bool needLock;
 
-	len = MAXALIGN(len);		/* be conservative */
+	len = MAXALIGN(len); /* be conservative */
 
 	/* Bulk insert is not supported for updates, only inserts. */
 	Assert(otherBuffer == InvalidBuffer || !bistate);
@@ -371,7 +367,7 @@ RelationGetBufferForTuple(Relation relation, Size len,
 	 * extensions while inserting large tuples into low-fillfactor tables.
 	 */
 	nearlyEmptyFreeSpace = MaxHeapTupleSize -
-		(MaxHeapTuplesPerPage / 8 * sizeof(ItemIdData));
+						   (MaxHeapTuplesPerPage / 8 * sizeof(ItemIdData));
 	if (len + saveFreeSpace > nearlyEmptyFreeSpace)
 		targetFreeSpace = Max(len, nearlyEmptyFreeSpace);
 	else
@@ -380,7 +376,7 @@ RelationGetBufferForTuple(Relation relation, Size len,
 	if (otherBuffer != InvalidBuffer)
 		otherBlock = BufferGetBlockNumber(otherBuffer);
 	else
-		otherBlock = InvalidBlockNumber;	/* just to keep compiler quiet */
+		otherBlock = InvalidBlockNumber; /* just to keep compiler quiet */
 
 	/*
 	 * We first try to put the tuple on the same page we last inserted a tuple
@@ -394,6 +390,9 @@ RelationGetBufferForTuple(Relation relation, Size len,
 	 *
 	 * When use_fsm is false, we either put the tuple onto the existing target
 	 * page or extend the relation.
+	 * 获取准备写入的blockNumber
+	 * 如果有并行insert的buffer的block或着缓存的block，直接返回
+	 * 如果没有，则通过FSM获取空闲的位置
 	 */
 	if (bistate && bistate->current_buf != InvalidBuffer)
 		targetBlock = BufferGetBlockNumber(bistate->current_buf);
@@ -423,6 +422,7 @@ RelationGetBufferForTuple(Relation relation, Size len,
 	}
 
 loop:
+	// 获知targetBlock后，尝试将其pin住并加锁
 	while (targetBlock != InvalidBlockNumber)
 	{
 		/*
@@ -438,9 +438,11 @@ loop:
 		 * Checking without the lock creates a risk of getting the wrong
 		 * answer, so we'll have to recheck after acquiring the lock.
 		 */
+		// 没有并发修改的情况
 		if (otherBuffer == InvalidBuffer)
 		{
 			/* easy case */
+			// 获取buffer，pin并加锁
 			buffer = ReadBufferBI(relation, targetBlock, RBM_NORMAL, bistate);
 			if (PageIsAllVisible(BufferGetPage(buffer)))
 				visibilitymap_pin(relation, targetBlock, vmbuffer);
@@ -454,6 +456,9 @@ loop:
 
 			LockBuffer(buffer, BUFFER_LOCK_EXCLUSIVE);
 		}
+		// 并发insert本次的buffer相同，
+		// 直接获取相同的block，并尝试pin和加锁
+		// 在并发insert放锁之后成功加锁并返回
 		else if (otherBlock == targetBlock)
 		{
 			/* also easy case */
@@ -462,6 +467,7 @@ loop:
 				visibilitymap_pin(relation, targetBlock, vmbuffer);
 			LockBuffer(buffer, BUFFER_LOCK_EXCLUSIVE);
 		}
+		// 为防止死锁，按顺序锁住所有block
 		else if (otherBlock < targetBlock)
 		{
 			/* lock other buffer first */
@@ -529,6 +535,12 @@ loop:
 			MarkBufferDirty(buffer);
 		}
 
+		/*
+		再次判断page中是否有足够的empty空间，
+		如果有可以写入，返回buffer
+		如果没有，释放锁和pin，重新获取block Number，循环再次尝试加锁，直到有足够空间
+		*/
+
 		pageFreeSpace = PageGetHeapFreeSpace(page);
 		if (targetFreeSpace <= pageFreeSpace)
 		{
@@ -565,7 +577,9 @@ loop:
 													pageFreeSpace,
 													targetFreeSpace);
 	}
-
+	/*
+	之前从现有relation的page中获取锁没有完成，所以执行后续代码extend the relation
+	*/
 	/*
 	 * Have to extend the relation.
 	 *
